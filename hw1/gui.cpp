@@ -33,6 +33,17 @@ struct GuiData {
         bool predict{true};
         vector<Point> points;
     } least_square;
+
+    struct {
+        int m{3};
+        float a {0.01};
+        int num_points{50};
+        RidgeRegression solver;
+        bool enabled{false};
+        bool solve{true};
+        bool predict{true};
+        vector<Point> points;
+    } ridge_regression;
 };
 
 GuiData gui_data{};
@@ -87,11 +98,12 @@ void DrawImGUI() {
     if (gui_data.points_changed) {
         GuiOnPointsChanged();
         gui_data.least_square.solve = true;
+        gui_data.ridge_regression.solve = true;
         gui_data.points_changed     = false;
     }
 
     if (ImGui::Begin("Points")) {
-        ImGui::ListBox("<--", &gui_data.selected, gui_data.points_str_view.data(),
+        ImGui::ListBox("##1", &gui_data.selected, gui_data.points_str_view.data(),
                        gui_data.points_str_view.size(),
                        std::min<int>(30, gui_data.points_str_view.size()));
     }
@@ -102,13 +114,25 @@ void DrawImGUI() {
         ImGui::Checkbox("Enable context menu", &gui_data.opt_enable_context_menu);
 
         ImGui::BeginGroup();
-        ImGui::Checkbox("Enable Least Square", &gui_data.least_square.enabled);
-        ImGui::PushItemWidth(150);
+        ImGui::PushItemWidth(100);
+        ImGui::Checkbox("Enable Least Square    ", &gui_data.least_square.enabled);
         ImGui::SameLine();
-        ImGui::InputInt("Order", &gui_data.least_square.m, 1, 1);
+        ImGui::InputInt("Points##3", &gui_data.least_square.num_points, 1, 10);
         ImGui::SameLine();
-        ImGui::InputInt("Points", &gui_data.least_square.num_points, 1, 10);
+        ImGui::InputInt("Order##3", &gui_data.least_square.m, 1, 1);
         ImGui::EndGroup();
+
+        ImGui::BeginGroup();
+        ImGui::PushItemWidth(100);
+        ImGui::Checkbox("Enable Ridge Regression", &gui_data.ridge_regression.enabled);
+        ImGui::SameLine();
+        ImGui::InputInt("Points##4", &gui_data.ridge_regression.num_points, 1, 10);
+        ImGui::SameLine();
+        ImGui::InputInt("Order##4", &gui_data.ridge_regression.m, 1, 1);
+        ImGui::SameLine();
+        ImGui::InputFloat("Weight##4", &gui_data.ridge_regression.a, 0.001, 0.01);
+        ImGui::EndGroup();
+
 
         ImGui::Text("Mouse Right: drag to scroll, click for context menu.");
 
@@ -128,8 +152,40 @@ void DrawImGUI() {
             if (ls.solve) {
                 ls.solver = LeastSquare(ls.m, gui_data.points);
                 ls.solve  = false;
+                ls.predict= true;
             }
         }
+
+        if (gui_data.ridge_regression.enabled) {
+            auto& rr = gui_data.ridge_regression;
+            if (rr.m < 0) rr.m = 0;
+            if (rr.m > 15) rr.m = 15;
+
+            if (rr.a < 0.001) rr.a = 0.001;
+            if (rr.a > 1) rr.a = 1;
+
+            if (rr.num_points < 2) rr.num_points = 2;
+
+            if (rr.m != rr.solver.m) {
+                rr.solve   = true;
+                rr.predict = true;
+            }
+
+            if (rr.a != rr.solver.a) {
+                rr.solve = true;
+                rr.predict = true;
+            }
+
+            if (rr.num_points != rr.points.size())
+                rr.predict = true;
+
+            if (rr.solve) {
+                rr.solver = RidgeRegression(rr.m, rr.a, gui_data.points);
+                rr.solve  = false;
+                rr.predict= true;
+            }
+        }
+
 
         // Using InvisibleButton() as a convenience 1) it will advance the layout cursor and 2)
         // allows us to use IsItemHovered()/IsItemActive()
@@ -202,17 +258,33 @@ void DrawImGUI() {
         }
 
         if (gui_data.least_square.enabled) {
-            if (gui_data.least_square.predict) {
-                gui_data.least_square.points = gui_data.least_square.solver.predict(
-                    0, canvas_sz.x, gui_data.least_square.num_points);
+            auto& ll = gui_data.least_square;
+            if (ll.predict) {
+                ll.points = ll.solver.predict(
+                    0, canvas_sz.x, ll.num_points);
             }
-            const auto& xy = gui_data.least_square.points;
+            const auto& xy = ll.points;
             for (int n = 1; n < xy.size(); n++) {
                 draw_list->AddLine({origin.x + xy[n - 1].x, origin.y + xy[n - 1].y},
                                    {origin.x + xy[n].x, origin.y + xy[n].y},
                                    IM_COL32(255, 255, 128, 255), 2.0f);
             }
         }
+
+        if (gui_data.ridge_regression.enabled) {
+            auto& rr = gui_data.ridge_regression;
+            if (rr.predict) {
+                rr.points = rr.solver.predict(
+                    0, canvas_sz.x, rr.num_points);
+            }
+            const auto& xy = rr.points;
+            for (int n = 1; n < xy.size(); n++) {
+                draw_list->AddLine({origin.x + xy[n - 1].x, origin.y + xy[n - 1].y},
+                                   {origin.x + xy[n].x, origin.y + xy[n].y},
+                                   IM_COL32(255, 128, 255, 255), 2.0f);
+            }
+        }
+
 
         for (int n = 1; n < gui_data.points.size(); n++) {
             draw_list->AddCircleFilled(
