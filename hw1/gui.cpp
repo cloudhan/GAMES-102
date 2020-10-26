@@ -8,12 +8,14 @@
 
 using namespace std;
 
-struct Vec2 {
+struct Vec2
+{
     float x;
     float y;
 };
 
-struct GuiData {
+struct GuiData
+{
     vector<Point> points;
     string points_str{};
     int selected{0};
@@ -24,9 +26,31 @@ struct GuiData {
     bool opt_enable_context_menu{true};
     bool deleting_guard{false};
 
-    struct {
+    struct
+    {
+        int num_points{150}; // control the smoothness of GUI
+        MonomialInterpolation solver;
+        bool enabled{false};  // is this solver enabled
+        bool solve{true};     // should we solve the system
+        bool predict{true};   // should we do the prediction pass
+        vector<Point> points; // cached predicted points
+    } monomial;
+
+    struct
+    {
+        float sigma{33};
+        int num_points{150};
+        GaussInterpolation solver;
+        bool enabled{false};
+        bool solve{true};
+        bool predict{true};
+        vector<Point> points;
+    } gauss;
+
+    struct
+    {
         int m{3};
-        int num_points{50};
+        int num_points{150};
         LeastSquare solver;
         bool enabled{false};
         bool solve{true};
@@ -34,10 +58,11 @@ struct GuiData {
         vector<Point> points;
     } least_square;
 
-    struct {
+    struct
+    {
         int m{3};
-        float a {0.01};
-        int num_points{50};
+        float a{0.01};
+        int num_points{150};
         RidgeRegression solver;
         bool enabled{false};
         bool solve{true};
@@ -48,7 +73,8 @@ struct GuiData {
 
 GuiData gui_data{};
 
-void GuiOnPointsChanged() {
+void GuiOnPointsChanged()
+{
     if (!gui_data.points_changed)
         return;
 
@@ -75,7 +101,8 @@ void GuiOnPointsChanged() {
     }
 }
 
-void DrawImGUI() {
+void DrawImGUI()
+{
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -97,9 +124,11 @@ void DrawImGUI() {
 
     if (gui_data.points_changed) {
         GuiOnPointsChanged();
+        gui_data.monomial.solve = true;
+        gui_data.gauss.solve = true;
         gui_data.least_square.solve = true;
         gui_data.ridge_regression.solve = true;
-        gui_data.points_changed     = false;
+        gui_data.points_changed = false;
     }
 
     if (ImGui::Begin("Points")) {
@@ -113,9 +142,24 @@ void DrawImGUI() {
         ImGui::Checkbox("Enable grid", &gui_data.opt_enable_grid);
         ImGui::Checkbox("Enable context menu", &gui_data.opt_enable_context_menu);
 
-        ImGui::BeginGroup();
         ImGui::PushItemWidth(100);
-        ImGui::Checkbox("Enable Least Square    ", &gui_data.least_square.enabled);
+
+        ImGui::BeginGroup();
+        ImGui::Checkbox("Enable Monomial Interpolation", &gui_data.monomial.enabled);
+        ImGui::SameLine();
+        ImGui::InputInt("Points##1", &gui_data.monomial.num_points, 1, 10);
+        ImGui::EndGroup();
+
+        ImGui::BeginGroup();
+        ImGui::Checkbox("Enable Gauss Interpolation   ", &gui_data.gauss.enabled);
+        ImGui::SameLine();
+        ImGui::InputInt("Points##2", &gui_data.gauss.num_points, 1, 10);
+        ImGui::SameLine();
+        ImGui::InputFloat("Weight##4", &gui_data.gauss.sigma, 0.5, 5.0);
+        ImGui::EndGroup();
+
+        ImGui::BeginGroup();
+        ImGui::Checkbox("Enable Least Square          ", &gui_data.least_square.enabled);
         ImGui::SameLine();
         ImGui::InputInt("Points##3", &gui_data.least_square.num_points, 1, 10);
         ImGui::SameLine();
@@ -123,8 +167,7 @@ void DrawImGUI() {
         ImGui::EndGroup();
 
         ImGui::BeginGroup();
-        ImGui::PushItemWidth(100);
-        ImGui::Checkbox("Enable Ridge Regression", &gui_data.ridge_regression.enabled);
+        ImGui::Checkbox("Enable Ridge Regression      ", &gui_data.ridge_regression.enabled);
         ImGui::SameLine();
         ImGui::InputInt("Points##4", &gui_data.ridge_regression.num_points, 1, 10);
         ImGui::SameLine();
@@ -133,41 +176,86 @@ void DrawImGUI() {
         ImGui::InputFloat("Weight##4", &gui_data.ridge_regression.a, 0.001, 0.01);
         ImGui::EndGroup();
 
-
         ImGui::Text("Mouse Right: drag to scroll, click for context menu.");
+
+        if (gui_data.monomial.enabled) {
+            auto& mi = gui_data.monomial;
+
+            if (mi.num_points < 2)
+                mi.num_points = 2;
+
+            if (mi.num_points != mi.points.size())
+                mi.predict = true;
+
+            if (mi.solve) {
+                mi.solver = MonomialInterpolation(gui_data.points);
+                mi.solve = false;
+                mi.predict = true;
+            }
+        }
+
+        if (gui_data.gauss.enabled) {
+            auto& gs = gui_data.gauss;
+            if (gs.sigma < 10)
+                gs.sigma = 10;
+            if (gs.sigma > 100)
+                gs.sigma = 100;
+
+            if (gs.num_points < 2)
+                gs.num_points = 2;
+
+            if (gs.sigma != gs.solver.sigma)
+                gs.solve = true;
+
+            if (gs.num_points != gs.points.size())
+                gs.predict = true;
+
+            if (gs.solve) {
+                gs.solver = GaussInterpolation(gs.sigma, gui_data.points);
+                gs.solve = false;
+                gs.predict = true;
+            }
+        }
 
         if (gui_data.least_square.enabled) {
             auto& ls = gui_data.least_square;
-            if (ls.m < 0) ls.m = 0;
-            if (ls.m > 15) ls.m = 15;
-            if (ls.num_points < 2) ls.num_points = 2;
+            if (ls.m < 0)
+                ls.m = 0;
+            if (ls.m > 15)
+                ls.m = 15;
+            if (ls.num_points < 2)
+                ls.num_points = 2;
 
-            if (ls.m != ls.solver.m) {
-                ls.solve   = true;
-                ls.predict = true;
-            }
+            if (ls.m != ls.solver.m)
+                ls.solve = true;
+
             if (ls.num_points != ls.points.size())
                 ls.predict = true;
 
             if (ls.solve) {
                 ls.solver = LeastSquare(ls.m, gui_data.points);
-                ls.solve  = false;
-                ls.predict= true;
+                ls.solve = false;
+                ls.predict = true;
             }
         }
 
         if (gui_data.ridge_regression.enabled) {
             auto& rr = gui_data.ridge_regression;
-            if (rr.m < 0) rr.m = 0;
-            if (rr.m > 15) rr.m = 15;
+            if (rr.m < 0)
+                rr.m = 0;
+            if (rr.m > 15)
+                rr.m = 15;
 
-            if (rr.a < 0.001) rr.a = 0.001;
-            if (rr.a > 1) rr.a = 1;
+            if (rr.a < 0.001)
+                rr.a = 0.001;
+            if (rr.a > 1)
+                rr.a = 1;
 
-            if (rr.num_points < 2) rr.num_points = 2;
+            if (rr.num_points < 2)
+                rr.num_points = 2;
 
             if (rr.m != rr.solver.m) {
-                rr.solve   = true;
+                rr.solve = true;
                 rr.predict = true;
             }
 
@@ -181,11 +269,10 @@ void DrawImGUI() {
 
             if (rr.solve) {
                 rr.solver = RidgeRegression(rr.m, rr.a, gui_data.points);
-                rr.solve  = false;
-                rr.predict= true;
+                rr.solve = false;
+                rr.predict = true;
             }
         }
-
 
         // Using InvisibleButton() as a convenience 1) it will advance the layout cursor and 2)
         // allows us to use IsItemHovered()/IsItemActive()
@@ -198,7 +285,7 @@ void DrawImGUI() {
         ImVec2 canvas_p1{canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y};
 
         // Draw border and background color
-        ImGuiIO& io           = ImGui::GetIO();
+        ImGuiIO& io = ImGui::GetIO();
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
         draw_list->AddRectFilled(canvas_p0, canvas_p1, IM_COL32(50, 50, 50, 255));
         draw_list->AddRect(canvas_p0, canvas_p1, IM_COL32(255, 255, 255, 255));
@@ -206,7 +293,7 @@ void DrawImGUI() {
         // This will catch our interactions
         ImGui::InvisibleButton("canvas", canvas_sz);
         const bool is_hovered = ImGui::IsItemHovered(); // Hovered
-        const bool is_active  = ImGui::IsItemActive();  // Held
+        const bool is_active = ImGui::IsItemActive();   // Held
         const ImVec2 origin(canvas_p0.x + gui_data.scrolling.x,
                             canvas_p0.y + gui_data.scrolling.y); // Lock scrolled origin
         const Point mouse_pos_in_canvas{io.MousePos.x - origin.x, io.MousePos.y - origin.y};
@@ -257,11 +344,39 @@ void DrawImGUI() {
                 IM_COL32(255, 100, 100, 255));
         }
 
+        if (gui_data.monomial.enabled && gui_data.monomial.solver.m > 0) {
+            auto& mi = gui_data.monomial;
+            if (mi.predict) {
+                mi.points = mi.solver.predict(0, canvas_sz.x, mi.num_points);
+                mi.predict = false;
+            }
+            const auto& xy = mi.points;
+            for (int n = 1; n < xy.size(); n++) {
+                draw_list->AddLine({origin.x + xy[n - 1].x, origin.y + xy[n - 1].y},
+                                   {origin.x + xy[n].x, origin.y + xy[n].y},
+                                   IM_COL32(128, 255, 255, 255), 2.0f);
+            }
+        }
+
+        if (gui_data.gauss.enabled && gui_data.gauss.solver.m > 0) {
+            auto& gs = gui_data.gauss;
+            if (gs.predict) {
+                gs.points = gs.solver.predict(0, canvas_sz.x, gs.num_points);
+                gs.predict = false;
+            }
+            const auto& xy = gs.points;
+            for (int n = 1; n < xy.size(); n++) {
+                draw_list->AddLine({origin.x + xy[n - 1].x, origin.y + xy[n - 1].y},
+                                   {origin.x + xy[n].x, origin.y + xy[n].y},
+                                   IM_COL32(255, 128, 255, 255), 2.0f);
+            }
+        }
+
         if (gui_data.least_square.enabled) {
             auto& ll = gui_data.least_square;
             if (ll.predict) {
-                ll.points = ll.solver.predict(
-                    0, canvas_sz.x, ll.num_points);
+                ll.points = ll.solver.predict(0, canvas_sz.x, ll.num_points);
+                ll.predict = false;
             }
             const auto& xy = ll.points;
             for (int n = 1; n < xy.size(); n++) {
@@ -274,17 +389,16 @@ void DrawImGUI() {
         if (gui_data.ridge_regression.enabled) {
             auto& rr = gui_data.ridge_regression;
             if (rr.predict) {
-                rr.points = rr.solver.predict(
-                    0, canvas_sz.x, rr.num_points);
+                rr.points = rr.solver.predict(0, canvas_sz.x, rr.num_points);
+                rr.predict = false;
             }
             const auto& xy = rr.points;
             for (int n = 1; n < xy.size(); n++) {
                 draw_list->AddLine({origin.x + xy[n - 1].x, origin.y + xy[n - 1].y},
                                    {origin.x + xy[n].x, origin.y + xy[n].y},
-                                   IM_COL32(255, 128, 255, 255), 2.0f);
+                                   IM_COL32(0, 255, 255, 255), 2.0f);
             }
         }
-
 
         for (int n = 1; n < gui_data.points.size(); n++) {
             draw_list->AddCircleFilled(

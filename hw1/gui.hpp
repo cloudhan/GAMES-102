@@ -22,7 +22,8 @@
 
 #include <GLFW/glfw3.h>
 
-struct Point {
+struct Point
+{
     float x;
     float y;
 };

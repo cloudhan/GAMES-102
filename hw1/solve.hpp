@@ -7,7 +7,8 @@
 using Matrixf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
 using Vectorf = Eigen::Matrix<float, Eigen::Dynamic, 1>;
 
-struct Normalizer {
+struct Normalizer
+{
     float mean_x;
     float mean_y;
     float std_x;
@@ -22,9 +23,29 @@ struct Normalizer {
     float denormalize_y(float y);
 };
 
-// basis function: 1, x, x^2, ...
+struct MonomialInterpolation
+{
+    Normalizer norm;
+    int m;         // the highest order of the basis function
+    Vectorf coeff; // the solved coefficient
+    MonomialInterpolation() {}
+    MonomialInterpolation(const std::vector<Point>& points);
+    std::vector<Point> predict(float x_start, float x_end, int num_points);
+};
 
-struct LeastSquare {
+struct GaussInterpolation
+{
+    int m;         // number of Gauss basis
+    float sigma;   // the global standard deviation
+    Vectorf coeff; // the solved coefficient
+    Vectorf xs;    // the original xs that form the basis functions
+    GaussInterpolation() {}
+    GaussInterpolation(float sigma, const std::vector<Point>& points);
+    std::vector<Point> predict(float x_start, float x_end, int num_points);
+};
+
+struct LeastSquare
+{
     Normalizer norm;
     int m;         // the highest order of the basis function
     Vectorf coeff; // the solved coefficient
@@ -33,7 +54,8 @@ struct LeastSquare {
     std::vector<Point> predict(float x_start, float x_end, int num_points);
 };
 
-struct RidgeRegression {
+struct RidgeRegression
+{
     Normalizer norm;
     int m;
     float a; // the weighting term of normalization

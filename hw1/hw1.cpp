@@ -7,11 +7,13 @@
 using namespace gl;
 using namespace std;
 
-void GlfwErrorCallback(int error, const char* description) {
+void GlfwErrorCallback(int error, const char* description)
+{
     cerr << "GLFW Error" << error << ": " << description << endl;
 }
 
-int main() {
+int main()
+{
     glfwSetErrorCallback(GlfwErrorCallback);
     if (!glfwInit()) {
         cerr << "Failed to initialize GLFW" << endl;
