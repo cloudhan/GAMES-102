@@ -12,11 +12,20 @@ AlignEscapedNewlines: Left
 AlignTrailingComments: true
 
 AlwaysBreakTemplateDeclarations: true
+
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine : false
 AllowShortFunctionsOnASingleLine: Empty
-AllowShortIfStatementsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+AllowShortLoopsOnASingleLine: false
 
 BreakConstructorInitializers: BeforeComma
-BreakBeforeBraces: Linux
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: Never
+
 
 IndentCaseLabels: false
 FixNamespaceComments: true
