@@ -2,7 +2,6 @@ set(SOURCES
     "hw1.cpp"
     "solve.cpp"
     "gui.cpp"
-    "imgui_impl.cpp"
 )
 
 set(HEADERS
