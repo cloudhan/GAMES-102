@@ -97,7 +97,7 @@ void GuiOnPointsChanged()
     gui_data.points_str = oss.str();
 
     for (auto& ptr : gui_data.points_str_view) {
-        ptr = gui_data.points_str.data() + (int)ptr;
+        ptr = gui_data.points_str.data() + reinterpret_cast<ptrdiff_t>(ptr);
     }
 }
 
