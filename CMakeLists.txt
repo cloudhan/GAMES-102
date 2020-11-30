@@ -5,6 +5,10 @@ project(GAMES_102 CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /permissive- /wd4819")
+endif()
+
 set(IMGUI_SRCS
     external/imgui/imgui.cpp
     external/imgui/imgui_draw.cpp
@@ -22,3 +26,4 @@ find_package(glfw3 REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 add_subdirectory(hw1)
+add_subdirectory(hw2)
