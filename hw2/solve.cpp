@@ -70,12 +70,17 @@ void SgdOptimizer::update_params(const std::vector<ParamTP>& params, const vecto
     }
 }
 
-AdamOptimizer::AdamOptimizer(float lr)
+AdamOptimizer::AdamOptimizer(float lr, float b1, float b2, float eps)
     : Optimizer{lr}
+    , b1{b1}
+    , b2{b2}
+    , eps{eps}
 {
 }
 
-void AdamOptimizer::init_state(const vector<ParamTP>& params) {}
+void AdamOptimizer::init_state(const vector<ParamTP>& params)
+{
+}
 
 void AdamOptimizer::update_params(const std::vector<ParamTP>& params, const vector<ParamT>& grads)
 {
@@ -121,7 +126,6 @@ std::tuple<Matrixf, ManualDiffFunc> fc(const Eigen::Ref<const Matrixf>& x,
                                        const Eigen::Ref<const Matrixf>& b)
 {
     Matrixf ret = (x * w).rowwise() + b.row(0);
-    // std::cout << "x: " <<  x << " x * w: " << ret << std::endl;
 
     auto grad_func = [=](const ParamT& grad) {
         const Matrixf& g = std::get<Matrixf>(grad);
@@ -139,7 +143,6 @@ std::tuple<Matrixf, ManualDiffFunc> fc(const Eigen::Ref<const Matrixf>& x,
 std::tuple<Matrixf, ManualDiffFunc> gauss(const Eigen::Ref<const Matrixf>& x)
 {
     Matrixf ret = x.cwiseProduct(-x).array().exp();
-    // std::cout << "x: " <<  x << " guass(x): " << ret << std::endl;
 
     auto grad_func = [=](const ParamT& grad) {
         // grad .* e^(-x^2) .* (-2x)
@@ -196,17 +199,14 @@ Matrixf RBFNetwork::forward_backward(std::shared_ptr<Optimizer> opt,
     Matrixf x1;
     ManualDiffFunc g1;
     std::tie(x1, g1) = fc(x, w1, b1);
-    // std::cout << "x1: " << x1 << std::endl;
 
     Matrixf h;
     ManualDiffFunc gg;
     std::tie(h, gg) = gauss(x1);
-    // std::cout << "h: " << h << std::endl;
 
     Matrixf x2;
     ManualDiffFunc g2;
     std::tie(x2, g2) = fc(h, w2, b2);
-    // std::cout << "x2: " << x2 << std::endl;
 
     Matrixf loss;
     ManualDiffFunc gloss;
@@ -219,32 +219,20 @@ Matrixf RBFNetwork::forward_backward(std::shared_ptr<Optimizer> opt,
 
     auto g2_ret = g2(g2_in_grad);
     Matrixf& gg_in_grad = std::get<Matrixf>(g2_ret[0].value());
-    // Matrixf& w2_grad = std::get<Matrixf>(g2_ret[1].value());
-    // Matrixf& b2_grad = std::get<Matrixf>(g2_ret[2].value());
 
     auto gg_ret = gg(gg_in_grad);
     Matrixf& g1_in_grad = std::get<Matrixf>(gg_ret[0].value());
 
     auto g1_ret = g1(g1_in_grad);
-    // Matrixf& w1_grad = std::get<Matrixf>(g1_ret[1].value());
-    // Matrixf& b1_grad = std::get<Matrixf>(g1_ret[2].value());
 
-    // vector<ParamT> grads;
-    // grads.emplace_back(std::move(g1_ret[1].value())); // ∂ loss / ∂ w1
-    // grads.emplace_back(std::move(g1_ret[2].value())); // ∂ loss / ∂ b1
-    // grads.emplace_back(std::move(g2_ret[1].value())); // ∂ loss / ∂ w2
-    // grads.emplace_back(std::move(g2_ret[2].value())); // ∂ loss / ∂ b2
+    vector<ParamT> grads;
+    grads.emplace_back(std::move(g1_ret[1].value())); // ∂ loss / ∂ w1
+    grads.emplace_back(std::move(g1_ret[2].value())); // ∂ loss / ∂ b1
+    grads.emplace_back(std::move(g2_ret[1].value())); // ∂ loss / ∂ w2
+    grads.emplace_back(std::move(g2_ret[2].value())); // ∂ loss / ∂ b2
 
-    // TODO: update params
+    opt->update_params({ParamTP{&w1}, ParamTP{&b1}, ParamTP{&w2}, ParamTP{&b2}}, grads);
 
-    // std::cout << "w2: " << w2.transpose() << " grad: " <<
-    // std::get<Matrixf>(g2_ret[1].value()).transpose() << std::endl; std::cout << "w1: " << w1 << "
-    // grad: " << std::get<Matrixf>(g1_ret[1].value()) << std::endl;
-
-    b2 -= 0.1 * std::get<Matrixf>(g2_ret[2].value());
-    w2 -= 0.1 * std::get<Matrixf>(g2_ret[1].value());
-    b1 -= 0.1 * std::get<Matrixf>(g1_ret[2].value());
-    w1 -= 0.1 * std::get<Matrixf>(g1_ret[1].value());
     return loss;
 }
 
@@ -256,8 +244,6 @@ void RBFNetwork::fit(std::shared_ptr<Optimizer> opt, const std::vector<Point>& p
 
     Matrixf X(points.size(), 1);
     Matrixf Y(points.size(), 1);
-
-    gauss(X);
 
     for (int i = 0; i < points.size(); ++i) {
         X(i, 0) = norm.normalize_x(points[i].x);

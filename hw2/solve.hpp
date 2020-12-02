@@ -32,6 +32,7 @@ struct Normalizer
 struct Optimizer
 {
     float lr;
+
     Optimizer(float lr)
         : lr{lr} {};
     virtual ~Optimizer(){};
@@ -50,7 +51,13 @@ struct SgdOptimizer : public Optimizer
 
 struct AdamOptimizer : public Optimizer
 {
-    AdamOptimizer(float lr);
+    float b1;
+    float b2;
+    float eps;
+    std::vector<ParamT> m;
+    std::vector<ParamT> v;
+
+    AdamOptimizer(float lr, float b1=0.9f, float b2=0.999f, float eps=1e-8f);
     ~AdamOptimizer() override{};
     void init_state(const std::vector<ParamTP>& params) override;
     void update_params(const std::vector<ParamTP>& params, const std::vector<ParamT>& grads) override;
