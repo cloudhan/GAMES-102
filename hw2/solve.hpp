@@ -10,9 +10,6 @@
 using Matrixf = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic>;
 using Vectorf = Eigen::Matrix<float, Eigen::Dynamic, 1>;
 
-using ParamT = std::variant<Matrixf, Vectorf>;
-using ParamTP = std::variant<Matrixf*, Vectorf*>;
-
 struct Normalizer
 {
     float mean_x;
@@ -36,17 +33,17 @@ struct Optimizer
     Optimizer(float lr)
         : lr{lr} {};
     virtual ~Optimizer(){};
-    virtual void init_state(const std::vector<ParamTP>& params) = 0;
-    virtual void update_params(const std::vector<ParamTP>& params,
-                               const std::vector<ParamT>& grads) = 0;
+    virtual void init_state(const std::vector<Matrixf*>& params) = 0;
+    virtual void update_params(const std::vector<Matrixf*>& params,
+                               const std::vector<Matrixf>& grads) = 0;
 };
 
 struct SgdOptimizer : public Optimizer
 {
     SgdOptimizer(float lr);
     ~SgdOptimizer() override{};
-    void init_state(const std::vector<ParamTP>& params) override;
-    void update_params(const std::vector<ParamTP>& params, const std::vector<ParamT>& grads) override;
+    void init_state(const std::vector<Matrixf*>& params) override;
+    void update_params(const std::vector<Matrixf*>& params, const std::vector<Matrixf>& grads) override;
 };
 
 struct AdamOptimizer : public Optimizer
@@ -54,13 +51,13 @@ struct AdamOptimizer : public Optimizer
     float b1;
     float b2;
     float eps;
-    std::vector<ParamT> m;
-    std::vector<ParamT> v;
+    std::vector<Matrixf> m;
+    std::vector<Matrixf> v;
 
     AdamOptimizer(float lr, float b1=0.9f, float b2=0.999f, float eps=1e-8f);
     ~AdamOptimizer() override{};
-    void init_state(const std::vector<ParamTP>& params) override;
-    void update_params(const std::vector<ParamTP>& params, const std::vector<ParamT>& grads) override;
+    void init_state(const std::vector<Matrixf*>& params) override;
+    void update_params(const std::vector<Matrixf*>& params, const std::vector<Matrixf>& grads) override;
 };
 
 struct RBFNetwork

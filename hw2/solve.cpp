@@ -56,17 +56,12 @@ SgdOptimizer::SgdOptimizer(float lr)
 {
 }
 
-void SgdOptimizer::init_state(const vector<ParamTP>& params) {}
+void SgdOptimizer::init_state(const vector<Matrixf*>& params) {}
 
-void SgdOptimizer::update_params(const std::vector<ParamTP>& params, const vector<ParamT>& grads)
+void SgdOptimizer::update_params(const std::vector<Matrixf*>& params, const vector<Matrixf>& grads)
 {
     for (int i = 0; i < params.size(); i++) {
-        if (params[i].index() == 0) {
-            *std::get<0>(params[i]) -= lr * std::get<0>(grads[i]);
-        }
-        else {
-            *std::get<1>(params[i]) -= lr * std::get<1>(grads[i]);
-        }
+        *params[i] -= lr * grads[i];
     }
 }
 
@@ -78,11 +73,11 @@ AdamOptimizer::AdamOptimizer(float lr, float b1, float b2, float eps)
 {
 }
 
-void AdamOptimizer::init_state(const vector<ParamTP>& params)
+void AdamOptimizer::init_state(const vector<Matrixf*>& params)
 {
 }
 
-void AdamOptimizer::update_params(const std::vector<ParamTP>& params, const vector<ParamT>& grads)
+void AdamOptimizer::update_params(const std::vector<Matrixf*>& params, const vector<Matrixf>& grads)
 {
 }
 
@@ -115,11 +110,11 @@ void RBFNetwork::init(std::shared_ptr<Optimizer> opt)
     std::cout << w2.transpose() << std::endl;
     b2.setZero();
 
-    opt->init_state(vector{ParamTP{&w1}, ParamTP{&b1}, ParamTP{&w2}, ParamTP{&b2}});
+    opt->init_state(vector{&w1, &b1, &w2, &b2});
 }
 
 // I do not have a tape, so it is not a AutoDiffFunc
-using ManualDiffFunc = std::function<vector<std::optional<ParamT>>(const ParamT&)>;
+using ManualDiffFunc = std::function<vector<std::optional<Matrixf>>(const Matrixf&)>;
 
 std::tuple<Matrixf, ManualDiffFunc> fc(const Eigen::Ref<const Matrixf>& x,
                                        const Eigen::Ref<const Matrixf>& w,
@@ -127,14 +122,12 @@ std::tuple<Matrixf, ManualDiffFunc> fc(const Eigen::Ref<const Matrixf>& x,
 {
     Matrixf ret = (x * w).rowwise() + b.row(0);
 
-    auto grad_func = [=](const ParamT& grad) {
-        const Matrixf& g = std::get<Matrixf>(grad);
-
+    auto grad_func = [=](const Matrixf& g) {
         Matrixf gx = g * w.transpose();
         Matrixf gw = x.transpose() * g;
         Matrixf gb = g.colwise().sum();
 
-        return vector<std::optional<ParamT>>{gx, gw, gb};
+        return vector<std::optional<Matrixf>>{gx, gw, gb};
     };
 
     return {ret, grad_func};
@@ -144,12 +137,12 @@ std::tuple<Matrixf, ManualDiffFunc> gauss(const Eigen::Ref<const Matrixf>& x)
 {
     Matrixf ret = x.cwiseProduct(-x).array().exp();
 
-    auto grad_func = [=](const ParamT& grad) {
+    auto grad_func = [=](const Matrixf& grad) {
         // grad .* e^(-x^2) .* (-2x)
-        Matrixf grad_x = std::get<Matrixf>(grad).array().cwiseProduct(
+        Matrixf grad_x = grad.array().cwiseProduct(
             ret.array().cwiseProduct(-2.0 * x.array()));
 
-        return vector<std::optional<ParamT>>{grad_x};
+        return vector<std::optional<Matrixf>>{grad_x};
     };
 
     return {ret, grad_func};
@@ -165,11 +158,10 @@ std::tuple<Matrixf, ManualDiffFunc> l2_loss(const Eigen::Ref<const Matrixf>& y_p
     float loss_val = (1.0f / batchsize) * diff.array().pow(2.0).sum();
     loss(0, 0) = loss_val;
 
-    auto grad_func = [=](const ParamT& grad) {
-        Matrixf grad_loss = std::get<Matrixf>(grad)
-                                .replicate(diff.rows(), diff.cols())
+    auto grad_func = [=](const Matrixf& grad) {
+        Matrixf grad_loss = grad.replicate(diff.rows(), diff.cols())
                                 .cwiseProduct((1.0f / batchsize) * (2.0 * diff));
-        return vector<std::optional<ParamT>>{grad_loss};
+        return vector<std::optional<Matrixf>>{grad_loss};
     };
 
     return {loss, grad_func};
@@ -214,24 +206,24 @@ Matrixf RBFNetwork::forward_backward(std::shared_ptr<Optimizer> opt,
 
     Matrixf gloss_in_grad = Matrixf::Ones(loss.rows(), loss.cols());
 
-    auto gloss_ret = gloss(ParamT{gloss_in_grad});
-    Matrixf& g2_in_grad = std::get<Matrixf>(gloss_ret[0].value());
+    auto gloss_ret = gloss(gloss_in_grad);
+    Matrixf& g2_in_grad = gloss_ret[0].value();
 
     auto g2_ret = g2(g2_in_grad);
-    Matrixf& gg_in_grad = std::get<Matrixf>(g2_ret[0].value());
+    Matrixf& gg_in_grad = g2_ret[0].value();
 
     auto gg_ret = gg(gg_in_grad);
-    Matrixf& g1_in_grad = std::get<Matrixf>(gg_ret[0].value());
+    Matrixf& g1_in_grad = gg_ret[0].value();
 
     auto g1_ret = g1(g1_in_grad);
 
-    vector<ParamT> grads;
+    vector<Matrixf> grads;
     grads.emplace_back(std::move(g1_ret[1].value())); // ∂ loss / ∂ w1
     grads.emplace_back(std::move(g1_ret[2].value())); // ∂ loss / ∂ b1
     grads.emplace_back(std::move(g2_ret[1].value())); // ∂ loss / ∂ w2
     grads.emplace_back(std::move(g2_ret[2].value())); // ∂ loss / ∂ b2
 
-    opt->update_params({ParamTP{&w1}, ParamTP{&b1}, ParamTP{&w2}, ParamTP{&b2}}, grads);
+    opt->update_params({&w1, &b1, &w2, &b2}, grads);
 
     return loss;
 }
