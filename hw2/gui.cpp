@@ -30,7 +30,8 @@ struct GuiData
     {
         int num_basis{4};
         int num_points{150};
-        std::shared_ptr<Optimizer> opt{new SgdOptimizer(0.1)};
+        // std::shared_ptr<Optimizer> opt{new SgdOptimizer(0.1)};
+        std::shared_ptr<Optimizer> opt{new AdamOptimizer(0.1)};
         RBFNetwork solver{num_basis};
         bool enabled{true};
         bool fit{false};

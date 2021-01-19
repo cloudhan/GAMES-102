@@ -69,16 +69,39 @@ AdamOptimizer::AdamOptimizer(float lr, float b1, float b2, float eps)
     : Optimizer{lr}
     , b1{b1}
     , b2{b2}
+    , b1_{}
+    , b2_{}
     , eps{eps}
+    , m{}
+    , v{}
+    , step{}
 {
 }
 
 void AdamOptimizer::init_state(const vector<Matrixf*>& params)
 {
+    step = 0;
+    b1_ = 1;
+    b2_ = 1;
+    m.clear();
+    v.clear();
+    for(auto p : params) {
+        m.emplace_back(Matrixf::Zero(p->rows(), p->cols()));
+        v.emplace_back(Matrixf::Zero(p->rows(), p->cols()));
+    }
 }
 
 void AdamOptimizer::update_params(const std::vector<Matrixf*>& params, const vector<Matrixf>& grads)
 {
+    step += 1;
+    b1_ *= b1;
+    b2_ *= b2;
+    for(int i=0; i<grads.size(); i++) {
+        m[i] = b1 * m[i] + (1.0f - b1) * grads[i];
+        v[i] = b2 * v[i] + (1.0f - b2) * (grads[i].cwiseProduct(grads[i]));
+        Matrixf d = (m[i] / (1.0 - b1_)).array() / ((v[i] / (1.0 - b2_)).cwiseSqrt().array() + eps);
+        *params[i] -= lr * d;
+    }
 }
 
 RBFNetwork::RBFNetwork(int num_basis)

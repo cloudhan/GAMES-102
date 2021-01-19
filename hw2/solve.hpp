@@ -50,7 +50,10 @@ struct AdamOptimizer : public Optimizer
 {
     float b1;
     float b2;
+    float b1_;
+    float b2_;
     float eps;
+    int step;
     std::vector<Matrixf> m;
     std::vector<Matrixf> v;
 
